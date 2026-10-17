@@ -147,6 +147,13 @@ actor GitHubClient {
         return results
     }
 
+    /// Unconditional GET returning the raw body. Redirects to other hosts drop the token.
+    func raw(_ path: String) async throws -> Data {
+        let (data, http) = try await perform(request(makeURL(path, [:])), delegate: StripAuthOnRedirect())
+        try check(http, data)
+        return data
+    }
+
     @discardableResult
     func send(_ method: String, _ path: String, json: [String: Any]? = nil) async throws -> Data {
         let body = try json.map { try JSONSerialization.data(withJSONObject: $0) }
@@ -200,8 +207,8 @@ actor GitHubClient {
         return req
     }
 
-    private func perform(_ req: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let (data, response) = try await session.data(for: req)
+    private func perform(_ req: URLRequest, delegate: URLSessionTaskDelegate? = nil) async throws -> (Data, HTTPURLResponse) {
+        let (data, response) = try await session.data(for: req, delegate: delegate)
         guard let http = response as? HTTPURLResponse else { throw GitHubError.invalidResponse }
         if let limit = Self.parseRateLimit(http) { rateLimitHandler?(limit) }
         return (data, http)
@@ -264,6 +271,15 @@ actor GitHubClient {
             return URL(string: raw)
         }
         return nil
+    }
+}
+
+private final class StripAuthOnRedirect: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest) async -> URLRequest? {
+        var redirected = request
+        if request.url?.host != "api.github.com" { redirected.setValue(nil, forHTTPHeaderField: "Authorization") }
+        return redirected
     }
 }
 

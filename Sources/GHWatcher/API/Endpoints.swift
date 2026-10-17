@@ -160,6 +160,28 @@ extension GitHubClient {
         try await get("/repos/\(repo)/actions/runs/\(runID)/jobs", query: ["per_page": "100"], as: JobsResponse.self).value.jobs
     }
 
+    func run(_ repo: String, id: Int) async throws -> WorkflowRun {
+        try await get("/repos/\(repo)/actions/runs/\(id)", as: WorkflowRun.self).value
+    }
+
+    /// Plain-text log of one Actions job (GitHub redirects to a short-lived signed URL).
+    func jobLog(_ repo: String, jobID: Int) async throws -> String {
+        let data = try await raw("/repos/\(repo)/actions/jobs/\(jobID)/logs")
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func pull(_ repo: String, number: Int) async throws -> PullRequestREST {
+        try await get("/repos/\(repo)/pulls/\(number)", as: PullRequestREST.self).value
+    }
+
+    func reviews(_ repo: String, number: Int) async throws -> [PRReviewREST] {
+        try await get("/repos/\(repo)/pulls/\(number)/reviews", query: ["per_page": "100"], as: [PRReviewREST].self).value
+    }
+
+    func checkRuns(_ repo: String, sha: String) async throws -> [CheckRunREST] {
+        try await get("/repos/\(repo)/commits/\(sha)/check-runs", query: ["per_page": "100"], as: CheckRunsResponse.self).value.checkRuns
+    }
+
     func workflows(_ repo: String) async throws -> [Workflow] {
         try await get("/repos/\(repo)/actions/workflows", query: ["per_page": "100"], as: WorkflowsResponse.self).value.workflows
     }

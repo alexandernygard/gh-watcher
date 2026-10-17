@@ -110,6 +110,10 @@ struct WatchEvent: Identifiable, Hashable, Sendable {
     let involvesMe: Bool
     let date: Date
     var notified = false
+    /// Comes from something the user explicitly follows; notifies regardless of rules and quiet hours.
+    var followed = false
+    /// Replaces the kind's title as the notification headline.
+    var headline: String?
 
     init(kind: EventKind, repo: String, title: String, subtitle: String, url: URL?, actor: String? = nil,
          actorAvatar: URL? = nil, branch: String? = nil, involvesMe: Bool = false, date: Date = .now) {

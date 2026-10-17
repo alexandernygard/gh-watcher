@@ -30,6 +30,11 @@ final class AppStore {
     var rateLimits: [String: RateLimit] = [:]
     var feed: [WatchEvent] = []
     var selection: SidebarItem? = .overview
+    /// Selected PR in the My Pull Requests / Review Requests lists.
+    var collectionSelection: PRItem.ID?
+    var showQuickOpen = false
+    /// Bumped by ⌘F; list views focus their filter field when it changes.
+    var filterFocusToken = 0
     var appActive = true
     var lastError: String?
     var lastGlobalPoll: Date?
@@ -37,6 +42,8 @@ final class AppStore {
     private var pollTask: Task<Void, Never>?
     private var nextInboxPoll = Date.distantPast
     private var nextViewerPoll = Date.distantPast
+    var nextFollowPoll = Date.distantPast
+    private var recentlyNotified: [String: Date] = [:]
     private var inboxBaselineDone = false
     private var seenThreads: [String: Date] = [:]
 
@@ -232,6 +239,13 @@ final class AppStore {
             nextViewerPoll = now.addingTimeInterval(3600)
             Task { await pollViewer() }
         }
+        if !prefs.follows.isEmpty && now >= nextFollowPoll {
+            nextFollowPoll = now.addingTimeInterval(3600)
+            Task {
+                await pollFollows()
+                nextFollowPoll = Date.now.addingTimeInterval(followPollInterval * rateMultiplier)
+            }
+        }
     }
 
     func pollInbox() async {
@@ -290,12 +304,20 @@ final class AppStore {
     func handle(_ events: [WatchEvent]) {
         guard !events.isEmpty else { return }
         var processed: [WatchEvent] = []
+        let now = Date.now
+        recentlyNotified = recentlyNotified.filter { now.timeIntervalSince($0.value) < 600 }
         for var event in events {
-            if prefs.notificationsEnabled && !prefs.inQuietHours,
-               let rule = prefs.rules.first(where: { $0.matches(event, me: me?.login) }) {
+            // A followed run and the repo poller can both report the same finish; notify once.
+            let key = "\(event.kind.rawValue)|\(event.url?.absoluteString ?? event.title)"
+            guard prefs.notificationsEnabled, recentlyNotified[key] == nil else { processed.append(event); continue }
+            if event.followed {
+                notifier.post(event, sound: true)
+                event.notified = true
+            } else if !prefs.inQuietHours, let rule = prefs.rules.first(where: { $0.matches(event, me: me?.login) }) {
                 notifier.post(event, sound: rule.playSound)
                 event.notified = true
             }
+            if event.notified { recentlyNotified[key] = now }
             processed.append(event)
         }
         feed.insert(contentsOf: processed.sorted { $0.date > $1.date }, at: 0)

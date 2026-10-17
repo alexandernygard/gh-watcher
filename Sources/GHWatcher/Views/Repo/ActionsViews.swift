@@ -2,8 +2,7 @@ import SwiftUI
 
 struct RepoActionsView: View {
     @Environment(AppStore.self) private var store
-    let repoStore: RepoStore
-    @State private var selection: WorkflowRun.ID?
+    @Bindable var repoStore: RepoStore
     @State private var workflowFilter: Int?
     @State private var branchFilter: String?
     @State private var workflows: [Workflow] = []
@@ -48,19 +47,24 @@ struct RepoActionsView: View {
                 if list.isEmpty {
                     ContentUnavailableView("No workflow runs", systemImage: "play.circle")
                 } else {
-                    List(list, selection: $selection) { run in
+                    List(list, selection: $repoStore.selectedRun) { run in
                         RunRow(run: run).tag(run.id)
                             .contextMenu {
                                 Button("Open in Browser") { NSWorkspace.shared.open(run.htmlUrl) }
+                                let follow = Follow(run: run, repo: repoStore.fullName)
+                                Button(store.isFollowing(follow) ? "Stop Following" : "Notify When Finished") { store.toggleFollow(follow) }
                                 Button("Copy URL") { copyToPasteboard(run.htmlUrl.absoluteString) }
                             }
+                    }
+                    .listKeyNavigation($repoStore.selectedRun, ids: list.map(\.id)) { id in
+                        if let run = list.first(where: { $0.id == id }) { NSWorkspace.shared.open(run.htmlUrl) }
                     }
                 }
             }
             .frame(minWidth: 260, idealWidth: 420, maxWidth: 580)
 
             Group {
-                if let run = repoStore.runs.first(where: { $0.id == selection }) {
+                if let run = repoStore.runs.first(where: { $0.id == repoStore.selectedRun }) {
                     RunDetailView(repoStore: repoStore, run: run).id(run.id)
                 } else {
                     ContentUnavailableView("Select a workflow run", systemImage: "gearshape.2")
@@ -71,7 +75,7 @@ struct RepoActionsView: View {
         .task {
             if let client = store.client { workflows = (try? await client.workflows(repoStore.fullName)) ?? [] }
         }
-        .onAppear { if selection == nil { selection = list.first?.id } }
+        .onAppear { if repoStore.selectedRun == nil { repoStore.selectedRun = list.first?.id } }
     }
 
     private var uniqueWorkflows: [(Int, String)] {
@@ -139,6 +143,7 @@ struct RunDetailView: View {
     @State private var loading = true
     @State private var runner = ActionRunner()
     @State private var expanded: Set<Int> = []
+    @State private var logsShown: Set<Int> = []
 
     var body: some View {
         VStack(spacing: 0) {
@@ -153,6 +158,12 @@ struct RunDetailView: View {
                 .padding(16)
             }
         }
+        .focusedSceneValue(\.focusedItem, FocusedItem(url: run.htmlUrl, branch: run.headBranch, follow: Follow(run: run, repo: repoStore.fullName)))
+        .focusedSceneValue(\.runCommands, RunCommands(
+            rerunFailed: !run.isActive && run.state == .failure ? { act { try await $0.rerun(repoStore.fullName, runID: run.id, failedOnly: true) } } : nil,
+            rerunAll: run.isActive ? nil : { act { try await $0.rerun(repoStore.fullName, runID: run.id, failedOnly: false) } },
+            cancel: run.isActive ? { act { try await $0.cancel(repoStore.fullName, runID: run.id) } } : nil
+        ))
         .task(id: run.updatedAt) { await loadJobs() }
         .task {
             while !Task.isCancelled {
@@ -190,6 +201,7 @@ struct RunDetailView: View {
                     }
                     .fixedSize()
                 }
+                FollowButton(follow: Follow(run: run, repo: repoStore.fullName), runActive: run.isActive)
                 Button { NSWorkspace.shared.open(run.htmlUrl) } label: { Image(systemName: "safari") }.help("Open on GitHub")
             }
             HStack(spacing: 12) {
@@ -228,9 +240,11 @@ struct RunDetailView: View {
                         Text(((job.completedAt ?? .now).timeIntervalSince(start)).durationString)
                             .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                     }
-                    if let url = job.htmlUrl {
-                        Button { NSWorkspace.shared.open(url) } label: { Image(systemName: "doc.text.magnifyingglass") }
-                            .buttonStyle(.borderless).help("View logs on GitHub")
+                    if !job.state.isActive {
+                        Button {
+                            if logsShown.contains(job.id) { logsShown.remove(job.id) } else { logsShown.insert(job.id); expanded.insert(job.id) }
+                        } label: { Image(systemName: logsShown.contains(job.id) ? "text.alignleft.circle.fill" : "text.alignleft") }
+                            .buttonStyle(.borderless).help(logsShown.contains(job.id) ? "Hide log" : "Show log")
                     }
                 }
                 .padding(12)
@@ -256,6 +270,10 @@ struct RunDetailView: View {
                     }
                 }
                 .padding(.vertical, 6)
+                if logsShown.contains(job.id) {
+                    JobLogView(repo: repoStore.fullName, jobID: job.id, webURL: job.htmlUrl)
+                        .padding([.horizontal, .bottom], 12)
+                }
             }
         }
         .background(.background.secondary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
@@ -267,6 +285,11 @@ struct RunDetailView: View {
         if let fetched = try? await client.jobs(repoStore.fullName, runID: run.id) {
             if jobs.isEmpty {
                 expanded = Set(fetched.filter { $0.state == .failure || $0.state.isActive }.map(\.id))
+            }
+            // Show why it failed without a click, the first time each job is seen failing.
+            for job in fetched where job.state == .failure && !jobs.contains(where: { $0.id == job.id && $0.state == .failure }) {
+                logsShown.insert(job.id)
+                expanded.insert(job.id)
             }
             jobs = fetched
         }

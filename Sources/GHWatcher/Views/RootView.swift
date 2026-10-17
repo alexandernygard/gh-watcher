@@ -96,6 +96,9 @@ struct MainSplitView: View {
                 RateLimitIndicator()
             }
         }
+        .sheet(isPresented: $store.showQuickOpen) {
+            QuickOpenView().environment(store)
+        }
     }
 }
 

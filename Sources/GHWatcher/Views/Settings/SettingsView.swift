@@ -76,11 +76,42 @@ struct GeneralSettings: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
+            Section {
+                LabeledContent("Show menu bar panel") {
+                    HotkeyRecorder(hotkey: $prefs.menuHotkey)
+                }
+                LabeledContent("Quick Open") {
+                    HotkeyRecorder(hotkey: $prefs.quickOpenHotkey)
+                }
+                if !hotkeyConflicts.isEmpty {
+                    Text("\(hotkeyConflicts) is already used by another app. Pick a different combination.")
+                        .font(.caption).foregroundStyle(Color.ghRed)
+                }
+            } header: {
+                Text("Global shortcuts")
+            } footer: {
+                Text("These work from any app. Inside GH Watcher: ⌘K quick open, j/k or ↑/↓ to move through lists, ↩ or ⌘O to open on GitHub, ⌘⇧C copy URL, ⌘⌥C copy branch, ⌘⇧F follow, ⌘F filter, ⌘⇧[ ⌘⇧] switch repo tabs, ⌘⌥↑↓ switch repos. See the Go and Item menus for the rest.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .onChange(of: prefs.menuHotkey) { applyHotkeys() }
+            .onChange(of: prefs.quickOpenHotkey) { applyHotkeys() }
+
             Section("API budget") {
                 RateLimitDetails()
             }
         }
         .formStyle(.grouped)
+        .onAppear(perform: applyHotkeys)
+    }
+
+    @State private var hotkeyConflicts = ""
+
+    private func applyHotkeys() {
+        HotkeyCenter.shared.apply(store.prefs)
+        let c = HotkeyCenter.shared.conflicts
+        hotkeyConflicts = [c.contains(.menuBar) ? store.prefs.menuHotkey?.display : nil,
+                           c.contains(.quickOpen) ? store.prefs.quickOpenHotkey?.display : nil]
+            .compactMap { $0 }.joined(separator: " and ")
     }
 }
 

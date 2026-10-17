@@ -21,6 +21,9 @@ final class Preferences {
     var showInDock: Bool { didSet { defaults.set(showInDock, forKey: "showInDock") } }
     var menuBarShowsCount: Bool { didSet { defaults.set(menuBarShowsCount, forKey: "menuBarShowsCount") } }
     var didOnboard: Bool { didSet { defaults.set(didOnboard, forKey: "didOnboard") } }
+    var follows: [Follow] { didSet { save(follows, "follows") } }
+    var menuHotkey: Hotkey? { didSet { save(menuHotkey, "menuHotkey") } }
+    var quickOpenHotkey: Hotkey? { didSet { save(quickOpenHotkey, "quickOpenHotkey") } }
 
     init() {
         defaults.register(defaults: [
@@ -46,6 +49,9 @@ final class Preferences {
         showInDock = defaults.bool(forKey: "showInDock")
         menuBarShowsCount = defaults.bool(forKey: "menuBarShowsCount")
         didOnboard = defaults.bool(forKey: "didOnboard")
+        follows = Self.load([Follow].self, "follows", defaults) ?? []
+        menuHotkey = defaults.object(forKey: "menuHotkey") == nil ? Hotkey.defaultMenu : Self.load(Hotkey?.self, "menuHotkey", defaults) ?? nil
+        quickOpenHotkey = defaults.object(forKey: "quickOpenHotkey") == nil ? Hotkey.defaultQuickOpen : Self.load(Hotkey?.self, "quickOpenHotkey", defaults) ?? nil
     }
 
     var inQuietHours: Bool {

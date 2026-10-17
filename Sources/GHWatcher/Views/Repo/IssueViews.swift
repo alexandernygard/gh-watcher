@@ -43,12 +43,11 @@ struct IssueRow: View {
 
 struct RepoIssuesView: View {
     @Environment(AppStore.self) private var store
-    let repoStore: RepoStore
-    @State private var selection: Issue.ID?
+    @Bindable var repoStore: RepoStore
     @State private var showClosed = false
     @State private var search = ""
     @State private var label: String?
-    @State private var showNew = false
+    @FocusState private var filterFocused: Bool
 
     private var source: [Issue] { showClosed ? repoStore.closedIssues : repoStore.issues }
 
@@ -81,8 +80,8 @@ struct RepoIssuesView: View {
                     }
                     .menuIndicator(.hidden)
                     .fixedSize()
-                    TextField("Filter", text: $search).textFieldStyle(.roundedBorder)
-                    Button { showNew = true } label: { Image(systemName: "square.and.pencil") }
+                    TextField("Filter", text: $search).textFieldStyle(.roundedBorder).focused($filterFocused)
+                    Button { repoStore.presentingNewIssue = true } label: { Image(systemName: "square.and.pencil") }
                         .help("New issue")
                 }
                 .padding(10)
@@ -90,19 +89,22 @@ struct RepoIssuesView: View {
                 if list.isEmpty {
                     ContentUnavailableView(showClosed ? "No closed issues" : "No open issues", systemImage: "checkmark.circle")
                 } else {
-                    List(list, selection: $selection) { issue in
+                    List(list, selection: $repoStore.selectedIssue) { issue in
                         IssueRow(issue: issue).tag(issue.id)
                             .contextMenu {
                                 Button("Open in Browser") { NSWorkspace.shared.open(issue.htmlUrl) }
                                 Button("Copy URL") { copyToPasteboard(issue.htmlUrl.absoluteString) }
                             }
                     }
+                    .listKeyNavigation($repoStore.selectedIssue, ids: list.map(\.id)) { id in
+                        if let issue = list.first(where: { $0.id == id }) { NSWorkspace.shared.open(issue.htmlUrl) }
+                    }
                 }
             }
             .frame(minWidth: 260, idealWidth: 400, maxWidth: 560)
 
             Group {
-                if let issue = list.first(where: { $0.id == selection }) {
+                if let issue = list.first(where: { $0.id == repoStore.selectedIssue }) {
                     IssueDetailView(repo: repoStore.fullName, issue: issue).id(issue.id)
                 } else {
                     ContentUnavailableView("Select an issue", systemImage: "smallcircle.filled.circle")
@@ -113,9 +115,7 @@ struct RepoIssuesView: View {
         .task(id: showClosed) {
             if showClosed, let client = store.client { await repoStore.loadClosed(client: client) }
         }
-        .sheet(isPresented: $showNew) {
-            NewIssueSheet(repoStore: repoStore).environment(store)
-        }
+        .onChange(of: store.filterFocusToken) { filterFocused = true }
     }
 }
 
@@ -159,6 +159,7 @@ struct IssueDetailView: View {
                 .padding(16)
             }
         }
+        .focusedSceneValue(\.focusedItem, FocusedItem(url: issue.htmlUrl))
         .task(id: issue.updatedAt) { await load() }
     }
 

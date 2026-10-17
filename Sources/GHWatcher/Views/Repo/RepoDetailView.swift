@@ -3,8 +3,6 @@ import SwiftUI
 struct RepoDetailView: View {
     @Environment(AppStore.self) private var store
     @Bindable var repoStore: RepoStore
-    @State private var showNewIssue = false
-    @State private var showNewPR = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,8 +38,8 @@ struct RepoDetailView: View {
             ToolbarItemGroup {
                 if repoStore.isPolling { ProgressView().controlSize(.small) }
                 Menu {
-                    Button("New Issue…") { showNewIssue = true }
-                    Button("New Pull Request…") { showNewPR = true }
+                    Button("New Issue…") { repoStore.presentingNewIssue = true }
+                    Button("New Pull Request…") { repoStore.presentingNewPR = true }
                 } label: {
                     Label("New", systemImage: "plus")
                 }
@@ -52,8 +50,8 @@ struct RepoDetailView: View {
             }
         }
         .onChange(of: repoStore.tab) { repoStore.nextPoll = .distantPast }
-        .sheet(isPresented: $showNewIssue) { NewIssueSheet(repoStore: repoStore).environment(store) }
-        .sheet(isPresented: $showNewPR) { NewPRSheet(repoStore: repoStore).environment(store) }
+        .sheet(isPresented: $repoStore.presentingNewIssue) { NewIssueSheet(repoStore: repoStore).environment(store) }
+        .sheet(isPresented: $repoStore.presentingNewPR) { NewPRSheet(repoStore: repoStore).environment(store) }
     }
 }
 

@@ -54,6 +54,27 @@ enum SelfTest {
         if let run = store.runs.first {
             _ = await check("jobs", { try await client.jobs(repo, runID: run.id) }, { "\($0.count)" })
         }
+        if let run = store.runs.first {
+            _ = await check("run", { try await client.run(repo, id: run.id) }, { "\($0.state)" })
+        }
+        if let failed = store.runs.first(where: { $0.state == .failure }),
+           let jobs = await check("failed jobs", { try await client.jobs(repo, runID: failed.id) }, { "\($0.filter { $0.state == .failure }.count) failed" }),
+           let job = jobs.first(where: { $0.state == .failure }) {
+            if let raw = await check("jobLog \(job.name)", { try await client.jobLog(repo, jobID: job.id) }, { "\($0.count) bytes" }) {
+                let log = JobLog(raw: raw)
+                line("ok   parsed: lines=\(log.lines.count) errors=\(log.errorCount) excerpt=\(log.excerpt.count)")
+                for l in log.excerpt.suffix(8) { line("     | \(l.level) \(l.text.prefix(110))") }
+            }
+        } else {
+            line("--   no failed run in the latest \(store.runs.count) to test logs with")
+        }
+        if let pr = store.prs.first ?? store.closedPRs.first {
+            if let rest = await check("pull #\(pr.number)", { try await client.pull(repo, number: pr.number) }, { "comments=\($0.comments ?? -1) review_comments=\($0.reviewComments ?? -1)" }) {
+                _ = await check("reviews", { try await client.reviews(repo, number: pr.number) }, { "\($0.count)" })
+                _ = await check("checkRuns", { try await client.checkRuns(repo, sha: rest.head.sha) }, { "\($0.count) → \(CIState.combine($0.map(\.state)))" })
+            }
+        }
+        line("fuzzy: \(Fuzzy.score("clic", "cli/cli") ?? -1) \(Fuzzy.score("ghw act", "alex/gh-watcher › Actions") ?? -1) \(Fuzzy.score("zzz", "cli/cli") ?? -1)")
         if let sha = store.graph?.rows.first?.id {
             _ = await check("commit", { try await client.commit(repo, sha: sha) }, { "files=\($0.files?.count ?? 0)" })
         }
@@ -103,12 +124,14 @@ enum Snapshot {
             store.selection = .repo(repo)
             for tab in [RepoTab.overview, .graph, .pulls, .actions, .issues, .branches] {
                 s.tab = tab
+                if tab == .actions { s.selectedRun = s.runs.first { $0.state == .failure }?.id ?? s.runs.first?.id }
                 if tab == .graph, let client = store.client { await s.loadGraph(client: client) }
                 await shot("repo-\(tab.rawValue)", size: size) { RootView() }
             }
         }
         store.selection = .inbox
         await shot("inbox", size: size) { RootView() }
+        await shot("quickopen", size: CGSize(width: 620, height: 560)) { QuickOpenView() }
         await shot("menubar", size: CGSize(width: 380, height: 640)) { MenuBarView() }
         await shot("settings-notifications", size: CGSize(width: 680, height: 560)) { NotificationSettings() }
         exit(0)

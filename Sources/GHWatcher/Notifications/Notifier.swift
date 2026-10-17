@@ -21,7 +21,7 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate, @unchecked Sen
     func post(_ event: WatchEvent, sound: Bool) {
         guard let center else { return }
         let content = UNMutableNotificationContent()
-        content.title = event.kind.title
+        content.title = event.headline ?? event.kind.title
         content.subtitle = event.repo
         content.body = event.subtitle.isEmpty ? event.title : "\(event.title)\n\(event.subtitle)"
         content.threadIdentifier = event.repo

@@ -13,19 +13,7 @@ struct GHWatcherApp: App {
         }
         .defaultSize(width: 1280, height: 820)
         .windowToolbarStyle(.unified)
-        .commands {
-            CommandGroup(after: .toolbar) {
-                Button("Refresh All") { store.refreshAll() }
-                    .keyboardShortcut("r", modifiers: [.command])
-            }
-            CommandMenu("Go") {
-                Button("Overview") { store.selection = .overview }.keyboardShortcut("1")
-                Button("Inbox") { store.selection = .inbox }.keyboardShortcut("2")
-                Button("My Pull Requests") { store.selection = .myPRs }.keyboardShortcut("3")
-                Button("Review Requests") { store.selection = .reviews }.keyboardShortcut("4")
-                Button("Live Feed") { store.selection = .feed }.keyboardShortcut("5")
-            }
-        }
+        .commands { AppCommands(store: store) }
 
         MenuBarExtra {
             MenuBarView()
@@ -58,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let store = AppStore.shared
             store.notifier.activate()
             store.applyDockPreference()
+            HotkeyCenter.shared.apply(store.prefs)
             Task { await store.bootstrap() }
         }
     }

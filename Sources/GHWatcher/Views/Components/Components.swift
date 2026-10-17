@@ -337,3 +337,21 @@ func copyToPasteboard(_ string: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(string, forType: .string)
 }
+
+/// Bell toggle that follows a run or pull request and notifies on its next change.
+struct FollowButton: View {
+    @Environment(AppStore.self) private var store
+    let follow: Follow
+    var runActive = true
+
+    var body: some View {
+        let on = store.isFollowing(follow)
+        Button { store.toggleFollow(follow) } label: {
+            Image(systemName: on ? "bell.fill" : "bell")
+                .foregroundStyle(on ? Color.ghAmber : .primary)
+        }
+        .help(on ? "Following — click to stop (⌘⇧F)" : follow.isRun
+              ? (runActive ? "Notify me when this run finishes (⌘⇧F)" : "Notify me when the next attempt of this run finishes (⌘⇧F)")
+              : "Notify me about reviews, comments, checks and merges (⌘⇧F)")
+    }
+}

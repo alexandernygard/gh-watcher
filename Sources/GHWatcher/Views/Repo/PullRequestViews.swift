@@ -44,27 +44,34 @@ struct PRCollectionView: View {
     let subtitle: String
     let prs: [PRItem]
     let emptySymbol: String
-    @State private var selection: PRItem.ID?
+
+    private var ordered: [(key: String, value: [PRItem])] {
+        Dictionary(grouping: prs, by: \.repo).sorted { $0.key < $1.key }
+    }
 
     var body: some View {
+        @Bindable var store = store
         HSplitView {
             Group {
                 if prs.isEmpty {
                     ContentUnavailableView("Nothing here", systemImage: emptySymbol, description: Text(subtitle))
                 } else {
-                    List(selection: $selection) {
-                        ForEach(Dictionary(grouping: prs, by: \.repo).sorted { $0.key < $1.key }, id: \.key) { repo, items in
+                    List(selection: $store.collectionSelection) {
+                        ForEach(ordered, id: \.key) { repo, items in
                             Section(repo) {
-                                ForEach(items) { pr in PRRow(pr: pr).tag(pr.id) }
+                                ForEach(items) { pr in PRRow(pr: pr).tag(pr.id).contextMenu { PRContextMenu(pr: pr) } }
                             }
                         }
+                    }
+                    .listKeyNavigation($store.collectionSelection, ids: ordered.flatMap { $0.value.map(\.id) }) { id in
+                        if let pr = prs.first(where: { $0.id == id }) { NSWorkspace.shared.open(pr.url) }
                     }
                 }
             }
             .frame(minWidth: 260, idealWidth: 400, maxWidth: 560)
 
             Group {
-                if let pr = prs.first(where: { $0.id == selection }) {
+                if let pr = prs.first(where: { $0.id == store.collectionSelection }) {
                     PRDetailView(repo: pr.repo, number: pr.number, updatedAt: pr.updatedAt).id(pr.id)
                 } else {
                     ContentUnavailableView("Select a pull request", systemImage: "arrow.triangle.pull")
@@ -74,18 +81,20 @@ struct PRCollectionView: View {
         }
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
-        .onAppear { if selection == nil { selection = prs.first?.id } }
+        .onAppear {
+            if !prs.contains(where: { $0.id == store.collectionSelection }) { store.collectionSelection = ordered.first?.value.first?.id }
+        }
     }
 }
 
 /// Per-repo PR tab.
 struct RepoPullRequestsView: View {
     @Environment(AppStore.self) private var store
-    let repoStore: RepoStore
-    @State private var selection: PRItem.ID?
+    @Bindable var repoStore: RepoStore
     @State private var showClosed = false
     @State private var search = ""
     @State private var onlyMine = false
+    @FocusState private var filterFocused: Bool
 
     private var list: [PRItem] {
         (showClosed ? repoStore.closedPRs : repoStore.prs).filter { pr in
@@ -107,27 +116,25 @@ struct RepoPullRequestsView: View {
                     .fixedSize()
                     Toggle(isOn: $onlyMine) { Image(systemName: "person") }
                         .toggleStyle(.button).help("Only mine")
-                    TextField("Filter", text: $search).textFieldStyle(.roundedBorder)
+                    TextField("Filter", text: $search).textFieldStyle(.roundedBorder).focused($filterFocused)
                 }
                 .padding(10)
                 Divider()
                 if list.isEmpty {
                     ContentUnavailableView(showClosed ? "No closed pull requests" : "No open pull requests", systemImage: "arrow.triangle.pull")
                 } else {
-                    List(list, selection: $selection) { pr in
-                        PRRow(pr: pr).tag(pr.id)
-                            .contextMenu {
-                                Button("Open in Browser") { NSWorkspace.shared.open(pr.url) }
-                                Button("Copy Branch Name") { copyToPasteboard(pr.headRef) }
-                                Button("Copy URL") { copyToPasteboard(pr.url.absoluteString) }
-                            }
+                    List(list, selection: $repoStore.selectedPR) { pr in
+                        PRRow(pr: pr).tag(pr.id).contextMenu { PRContextMenu(pr: pr) }
+                    }
+                    .listKeyNavigation($repoStore.selectedPR, ids: list.map(\.id)) { id in
+                        if let pr = list.first(where: { $0.id == id }) { NSWorkspace.shared.open(pr.url) }
                     }
                 }
             }
             .frame(minWidth: 260, idealWidth: 400, maxWidth: 560)
 
             Group {
-                if let pr = list.first(where: { $0.id == selection }) {
+                if let pr = list.first(where: { $0.id == repoStore.selectedPR }) {
                     PRDetailView(repo: repoStore.fullName, number: pr.number, updatedAt: pr.updatedAt).id(pr.id)
                 } else {
                     ContentUnavailableView("Select a pull request", systemImage: "arrow.triangle.pull")
@@ -138,6 +145,22 @@ struct RepoPullRequestsView: View {
         .task(id: showClosed) {
             if showClosed, let client = store.client { await repoStore.loadClosed(client: client) }
         }
+        .onChange(of: store.filterFocusToken) { filterFocused = true }
+    }
+}
+
+struct PRContextMenu: View {
+    @Environment(AppStore.self) private var store
+    let pr: PRItem
+
+    var body: some View {
+        Button("Open in Browser") { NSWorkspace.shared.open(pr.url) }
+        let follow = Follow(pr: pr)
+        Button(store.isFollowing(follow) ? "Stop Following" : "Follow (Notify on Changes)") { store.toggleFollow(follow) }
+        Divider()
+        Button("Copy Branch Name") { copyToPasteboard(pr.headRef) }
+        Button("Copy URL") { copyToPasteboard(pr.url.absoluteString) }
+        Button("Copy Checkout Command") { copyToPasteboard("gh pr checkout \(pr.number) -R \(pr.repo)") }
     }
 }
 
@@ -158,6 +181,7 @@ struct PRDetailView: View {
     @State private var comment = ""
     @State private var runner = ActionRunner()
     @State private var confirmMerge: String?
+    @State private var checkLogs: Set<Int> = []
 
     var body: some View {
         Group {
@@ -228,6 +252,8 @@ struct PRDetailView: View {
                 .padding(16)
             }
         }
+        .focusedSceneValue(\.focusedItem, FocusedItem(url: pr.url, branch: pr.headRefName, follow: follow(pr)))
+        .focusedSceneValue(\.prCommands, prCommands(pr))
         .confirmationDialog("Merge pull request #\(pr.number)?", isPresented: Binding(get: { confirmMerge != nil }, set: { if !$0 { confirmMerge = nil } })) {
             Button(mergeTitle(confirmMerge)) {
                 let method = confirmMerge ?? "merge"
@@ -236,6 +262,18 @@ struct PRDetailView: View {
         } message: {
             Text("\(pr.headRefName) → \(pr.baseRefName)")
         }
+    }
+
+    private func follow(_ pr: GQLPR) -> Follow {
+        Follow(repo: repo, number: pr.number, title: pr.title, url: pr.url)
+    }
+
+    private func prCommands(_ pr: GQLPR) -> PRCommands {
+        let open = pr.state == "OPEN" && pr.mergedAt == nil
+        return PRCommands(
+            approve: open && pr.author?.login != store.me?.login ? { perform { try await $0.review(repo, number: number, event: "APPROVE") } } : nil,
+            merge: open && !pr.isDraft && pr.mergeable != "CONFLICTING" ? { confirmMerge = "squash" } : nil
+        )
     }
 
     private func label(for section: Section, _ pr: GQLPR) -> String {
@@ -332,6 +370,7 @@ struct PRDetailView: View {
             } else if state == "CLOSED" {
                 Button("Reopen") { perform { try await $0.setPRState(repo, number: number, open: true) } }
             }
+            FollowButton(follow: follow(pr))
             Button { NSWorkspace.shared.open(pr.url) } label: { Image(systemName: "safari") }
                 .help("Open on GitHub")
         }
@@ -410,6 +449,7 @@ struct PRDetailView: View {
                 Card(name, systemImage: "gearshape.2") {
                     VStack(spacing: 6) {
                         ForEach(items) { check in
+                            let jobID = check.ciState.isActive ? nil : check.link?.actionsJobID
                             HStack(spacing: 10) {
                                 CIStatusIcon(state: check.ciState)
                                 VStack(alignment: .leading, spacing: 1) {
@@ -420,9 +460,18 @@ struct PRDetailView: View {
                                 if let duration = check.duration {
                                     Text(duration.durationString).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                                 }
+                                if let jobID {
+                                    Button(checkLogs.contains(jobID) ? "Hide Log" : check.ciState == .failure ? "Why?" : "Log") {
+                                        if checkLogs.contains(jobID) { checkLogs.remove(jobID) } else { checkLogs.insert(jobID) }
+                                    }
+                                    .buttonStyle(.link)
+                                }
                                 if let link = check.link {
                                     Button("Details") { NSWorkspace.shared.open(link) }.buttonStyle(.link)
                                 }
+                            }
+                            if let jobID, checkLogs.contains(jobID) {
+                                JobLogView(repo: repo, jobID: jobID, webURL: check.link)
                             }
                         }
                     }

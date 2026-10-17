@@ -133,6 +133,31 @@ struct PullRequestREST: Decodable, Hashable, Identifiable, Sendable {
     let mergedAt: Date?
     let head: PRRef
     let base: PRRef
+    /// Only present on the single pull request endpoint.
+    let comments: Int?
+    let reviewComments: Int?
+}
+
+struct PRReviewREST: Decodable, Hashable, Identifiable, Sendable {
+    let id: Int
+    let user: GHUser?
+    let state: String
+    let submittedAt: Date?
+    let htmlUrl: URL?
+}
+
+struct CheckRunsResponse: Decodable, Sendable {
+    let totalCount: Int
+    let checkRuns: [CheckRunREST]
+}
+
+struct CheckRunREST: Decodable, Hashable, Identifiable, Sendable {
+    let id: Int
+    let name: String
+    let status: String?
+    let conclusion: String?
+
+    var state: CIState { CIState(status: status, conclusion: conclusion) }
 }
 
 struct PRRef: Decodable, Hashable, Sendable {

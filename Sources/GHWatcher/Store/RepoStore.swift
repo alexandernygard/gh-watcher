@@ -18,6 +18,12 @@ enum RepoTab: String, CaseIterable, Identifiable {
         }
     }
 
+    func offset(_ delta: Int) -> RepoTab {
+        let all = Self.allCases
+        let i = all.firstIndex(of: self)!
+        return all[(i + delta + all.count) % all.count]
+    }
+
     var symbol: String {
         switch self {
         case .overview: "house"
@@ -51,6 +57,11 @@ final class RepoStore: Identifiable {
     var closedIssues: [Issue] = []
 
     var tab: RepoTab = .overview
+    var selectedPR: PRItem.ID?
+    var selectedIssue: Issue.ID?
+    var selectedRun: WorkflowRun.ID?
+    var presentingNewIssue = false
+    var presentingNewPR = false
     var lastPolled: Date?
     var lastError: String?
     var isPolling = false

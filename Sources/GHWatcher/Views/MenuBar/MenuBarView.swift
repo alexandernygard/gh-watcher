@@ -42,6 +42,7 @@ struct MenuBarView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         if store.attentionCount > 0 { attention }
+                        if !store.prefs.follows.isEmpty { following }
                         if !store.runningRuns.isEmpty { running }
                         repos
                         if !store.myPRs.isEmpty { myPRs }
@@ -146,8 +147,36 @@ struct MenuBarView: View {
             sectionTitle("Running")
             ForEach(store.runningRuns.prefix(6), id: \.1.id) { s, run in
                 MenuRow(icon: AnyView(CIStatusIcon(state: run.state)), title: "\(run.workflowName) · \(run.headBranch ?? "")",
-                        subtitle: s.fullName, date: run.runStartedAt) {
+                        subtitle: s.fullName, date: run.runStartedAt,
+                        trailing: store.isFollowing(Follow(run: run, repo: s.fullName)) ? "following" : nil) {
                     NSWorkspace.shared.open(run.htmlUrl)
+                }
+                .contextMenu {
+                    let follow = Follow(run: run, repo: s.fullName)
+                    Button(store.isFollowing(follow) ? "Stop Following" : "Notify When Finished") { store.toggleFollow(follow) }
+                    Button("Show in GH Watcher") {
+                        s.selectedRun = run.id
+                        store.show(repo: s.fullName, tab: .actions)
+                        openMain()
+                    }
+                }
+            }
+        }
+    }
+
+    private var following: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            sectionTitle("Following")
+            ForEach(store.prefs.follows) { follow in
+                let state = CIState(rawValue: follow.snapshot?.isRunActiveOrChecks ?? "") ?? .none
+                MenuRow(icon: AnyView(Image(systemName: follow.isRun ? "bell.fill" : "arrow.triangle.pull")
+                            .foregroundStyle(state.isActive ? Color.ghAmber : Color.ghBlue)),
+                        title: follow.title,
+                        subtitle: "\(follow.repo) · \(follow.statusLine)", date: follow.created) {
+                    NSWorkspace.shared.open(follow.url)
+                }
+                .contextMenu {
+                    Button("Stop Following") { store.unfollow(follow.id) }
                 }
             }
         }
@@ -174,8 +203,13 @@ struct MenuBarView: View {
             sectionTitle("Your pull requests") { show(.myPRs) }
             ForEach(store.myPRs.prefix(6)) { pr in
                 MenuRow(icon: AnyView(CIStatusIcon(state: pr.checkState)), title: pr.title,
-                        subtitle: "\(pr.repo)#\(pr.number)\(pr.reviewDecision == "APPROVED" ? " · approved" : "")", date: pr.updatedAt) {
+                        subtitle: "\(pr.repo)#\(pr.number)\(pr.reviewDecision == "APPROVED" ? " · approved" : "")", date: pr.updatedAt,
+                        trailing: store.isFollowing(Follow(pr: pr)) ? "following" : nil) {
                     NSWorkspace.shared.open(pr.url)
+                }
+                .contextMenu {
+                    let follow = Follow(pr: pr)
+                    Button(store.isFollowing(follow) ? "Stop Following" : "Follow (Notify on Changes)") { store.toggleFollow(follow) }
                 }
             }
         }
