@@ -31,7 +31,7 @@ struct RepoGraphView: View {
                     ContentUnavailableView("No commits", systemImage: "point.3.connected.trianglepath.dotted")
                 }
             }
-            .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 380, maxWidth: .infinity, maxHeight: .infinity)
 
             Group {
                 if let sha = selection, let row = repoStore.graph?.rows.first(where: { $0.id == sha }) {
@@ -41,7 +41,7 @@ struct RepoGraphView: View {
                                            description: Text("Shows the latest commits across the most recently active branches."))
                 }
             }
-            .frame(minWidth: 300, idealWidth: 340, maxWidth: 420, maxHeight: .infinity)
+            .frame(minWidth: 240, idealWidth: 340, maxWidth: 420, maxHeight: .infinity)
         }
         .onAppear {
             repoStore.graphVisible = true

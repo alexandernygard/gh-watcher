@@ -57,7 +57,7 @@ struct RepoActionsView: View {
                     }
                 }
             }
-            .frame(minWidth: 340, idealWidth: 420, maxWidth: 580)
+            .frame(minWidth: 260, idealWidth: 420, maxWidth: 580)
 
             Group {
                 if let run = repoStore.runs.first(where: { $0.id == selection }) {
@@ -66,7 +66,7 @@ struct RepoActionsView: View {
                     ContentUnavailableView("Select a workflow run", systemImage: "gearshape.2")
                 }
             }
-            .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
         }
         .task {
             if let client = store.client { workflows = (try? await client.workflows(repoStore.fullName)) ?? [] }

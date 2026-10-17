@@ -61,7 +61,7 @@ struct PRCollectionView: View {
                     }
                 }
             }
-            .frame(minWidth: 320, idealWidth: 400, maxWidth: 560)
+            .frame(minWidth: 260, idealWidth: 400, maxWidth: 560)
 
             Group {
                 if let pr = prs.first(where: { $0.id == selection }) {
@@ -70,7 +70,7 @@ struct PRCollectionView: View {
                     ContentUnavailableView("Select a pull request", systemImage: "arrow.triangle.pull")
                 }
             }
-            .frame(minWidth: 460, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
         }
         .navigationTitle(title)
         .navigationSubtitle(subtitle)
@@ -124,7 +124,7 @@ struct RepoPullRequestsView: View {
                     }
                 }
             }
-            .frame(minWidth: 320, idealWidth: 400, maxWidth: 560)
+            .frame(minWidth: 260, idealWidth: 400, maxWidth: 560)
 
             Group {
                 if let pr = list.first(where: { $0.id == selection }) {
@@ -133,7 +133,7 @@ struct RepoPullRequestsView: View {
                     ContentUnavailableView("Select a pull request", systemImage: "arrow.triangle.pull")
                 }
             }
-            .frame(minWidth: 460, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 360, maxWidth: .infinity, maxHeight: .infinity)
         }
         .task(id: showClosed) {
             if showClosed, let client = store.client { await repoStore.loadClosed(client: client) }
