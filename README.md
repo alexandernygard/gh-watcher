@@ -4,6 +4,22 @@ A native macOS (SwiftUI, macOS 26+) app for keeping an eye on your GitHub reposi
 CI/Actions, pull requests, issues, branches, a live commit graph, your notification inbox,
 custom desktop notifications and a menu bar status item.
 
+## Install
+
+```bash
+brew install --cask alexandernygard/tap/gh-watcher
+```
+
+The app isn't signed with a paid developer account, so the first launch is blocked: open
+**System Settings → Privacy & Security** and click **Open Anyway** once.
+
+## Releasing
+
+Push a tag like `v1.2.0`. The Release workflow builds a universal app, publishes it as a GitHub
+release and updates `Casks/gh-watcher.rb` in
+[homebrew-tap](https://github.com/alexandernygard/homebrew-tap) (needs the `HOMEBREW_TAP_TOKEN`
+secret, same as ur).
+
 ## Build & run
 
 Needs only the Xcode Command Line Tools (Swift 6.2).
