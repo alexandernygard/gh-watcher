@@ -29,6 +29,11 @@ struct RepoPickerView: View {
                 TextField("Search your repositories", text: $search).textFieldStyle(.roundedBorder)
                 Toggle("Hide archived", isOn: $hideArchived).toggleStyle(.checkbox)
                 if store.allReposLoading { ProgressView().controlSize(.small) }
+                Menu("Bulk") {
+                    Button("Watch All \(filtered.count) Shown") { store.watch(all: filtered.map(\.fullName)) }
+                    Button("Unwatch All Shown") { store.unwatch(all: filtered.map(\.fullName)) }
+                }
+                .fixedSize()
                 Button { Task { await store.loadAllRepos() } } label: { Image(systemName: "arrow.clockwise") }
             }
             List(filtered) { repo in

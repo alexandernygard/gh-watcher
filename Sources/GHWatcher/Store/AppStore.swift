@@ -137,13 +137,29 @@ final class AppStore {
         syncRepoStores()
     }
 
+    func watch(all names: [String]) {
+        prefs.watched += names.filter { !prefs.watched.contains($0) }
+        syncRepoStores()
+    }
+
+    func unwatch(all names: [String]) {
+        prefs.watched.removeAll { names.contains($0) }
+        if case .repo(let name) = selection, names.contains(name) { selection = .overview }
+        syncRepoStores()
+    }
+
     func toggleWatch(_ fullName: String) {
         isWatched(fullName) ? unwatch(fullName) : watch(fullName)
     }
 
     private func syncRepoStores() {
+        // Stagger first polls so watching many repos at once doesn't burst the API.
+        var delay: TimeInterval = 0
         for name in prefs.watched where repoStores[name] == nil {
-            repoStores[name] = RepoStore(fullName: name)
+            let store = RepoStore(fullName: name)
+            store.nextPoll = Date.now.addingTimeInterval(delay)
+            repoStores[name] = store
+            delay += 0.75
         }
         for name in repoStores.keys where !prefs.watched.contains(name) {
             repoStores[name] = nil
