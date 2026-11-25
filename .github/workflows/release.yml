@@ -1,10 +1,17 @@
-# Push a tag like v1.2.0 to build GH Watcher for Apple Silicon and Intel, publish it as a
-# GitHub release, and point the Homebrew cask in alexandernygard/homebrew-tap at it.
-name: Release
+# Builds the SwiftUI GH Watcher (v1) for Apple Silicon and Intel, publishes it as a GitHub release,
+# and points the Homebrew cask in alexandernygard/homebrew-tap at it.
+#
+# Retired: GH Watcher v2 is a rewrite built and released from a Mac, not from this workflow. Tags no
+# longer trigger it, so a v2 release tag can't start a v1 build. It can still be run by hand for a v1
+# tag.
+name: Release (v1, retired)
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "An existing v1 tag, such as v1.0.1"
+        required: true
 
 permissions:
   contents: write
@@ -14,9 +21,11 @@ jobs:
     # The app uses macOS 26 APIs, so it needs the macOS 26 SDK (Xcode 26).
     runs-on: macos-26
     env:
-      TAG: ${{ github.ref_name }}
+      TAG: ${{ inputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
 
       - name: Build
         run: UNIVERSAL=1 VERSION="$TAG" ./Scripts/build-app.sh release

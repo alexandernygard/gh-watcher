@@ -1,5 +1,8 @@
 # GH Watcher
 
+> **This is v1, archived.** GH Watcher v2 is a rewrite (Tauri + React, macOS 14+). It installs the
+> same way: `brew install --cask alexandernygard/tap/gh-watcher`.
+
 A native macOS (SwiftUI, macOS 26+) app for keeping an eye on your GitHub repositories:
 CI/Actions, pull requests, issues, branches, a live commit graph, your notification inbox,
 custom desktop notifications and a menu bar status item.
